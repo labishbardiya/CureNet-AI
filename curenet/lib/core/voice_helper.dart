@@ -41,7 +41,7 @@ class VoiceHelper {
       final ok = await BhashiniTtsService.synthesizeAndPlay(
         text: spokenText,
         language: lang,
-        speechRate: 0.3,
+        gender: 'female',
       );
       if (ok) return true;
       lastError = 'Voice failed. Check internet or Bhashini API key.';

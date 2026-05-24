@@ -6,10 +6,49 @@ import '../core/persona.dart';
 import 'tavily_service.dart';
 import 'ocr_service.dart';
 import '../core/data_mode.dart';
+import 'connectivity_service.dart';
 
+/// ═══════════════════════════════════════════════════════════════════
+///  CureNet AI Service — Gemma 4 Edge-First Architecture
+/// ═══════════════════════════════════════════════════════════════════
+///
+///  Dual-model architecture leveraging the Gemma 4 family:
+///
+///    • Gemma 4 E4B (Effective 4B) — On-Device / Edge
+///      Handles intent classification, title generation, and basic
+///      parsing via local Ollama runner. Its Per-Layer Embeddings
+///      (PLE) architecture packs frontier-level logic into a tiny
+///      memory footprint with 128K context window.
+///
+///    • Gemma 4 27B — Clinic Workstation / Cloud
+///      Handles complex medical reasoning, RAG-augmented chat, and
+///      multilingual responses. Deployed on the local clinic
+///      workstation via Ollama or routed to cloud (Groq) as fallback.
+///
+///  Routing:
+///    1. Try local Ollama endpoint (edge-first, zero-latency)
+///    2. Fallback to Groq cloud API if local is unavailable
+/// ═══════════════════════════════════════════════════════════════════
 class AiService {
-  static const String _apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-  static String get _apiKey => AppConfig.groqApiKey;
+  // ─── Groq Cloud (fallback) ──────────────────────────────────────
+  static const String _groqApiUrl = 'https://api.groq.com/openai/v1/chat/completions';
+  static String get _groqApiKey => AppConfig.groqApiKey;
+
+  // ─── Local Ollama (primary — edge-first) ────────────────────────
+  static String get _ollamaApiUrl => '${AppConfig.ollamaUrl}/v1/chat/completions';
+
+  // ─── Gemma 4 Model IDs ─────────────────────────────────
+  /// Gemma 4 E4B: lightweight edge model for intent & titles
+  static const String _gemma4Small = 'gemma4:e4b';
+  /// Gemma 4 31B Dense: full-power model for medical reasoning
+  static const String _gemma4Large = 'gemma4:31b';
+
+  // ─── Groq Fallback Model IDs ───────────────────────────────────
+  static const String _groqSmallModel = 'llama-3.1-8b-instant';
+  static const String _groqLargeModel = 'llama-3.3-70b-versatile';
+
+  /// Track whether Ollama is reachable (cached for session)
+  static bool? _ollamaAvailable;
 
   static String _buildSystemInstruction(String? patientData) {
     return '''
@@ -40,16 +79,59 @@ ${patientData ?? (DataMode.activeUserId == DataMode.arjunId ? Persona.aiContext 
     return fullResponse.isNotEmpty ? fullResponse : "I'm having trouble processing that right now.";
   }
 
+  /// ─── Ollama Health Check ──────────────────────────────────────
+  /// Uses ConnectivityService for cached, parallel network probing.
+  /// Edge-first: always try local Gemma 4 before cloud.
+  static Future<bool> _isOllamaAvailable() async {
+    if (_ollamaAvailable != null) return _ollamaAvailable!;
+    _ollamaAvailable = await ConnectivityService.hasOllama();
+    if (_ollamaAvailable!) {
+      debugPrint('[AI] ✅ Ollama reachable — using Gemma 4 (edge-first mode)');
+    } else {
+      debugPrint('[AI] ⚠ Ollama not reachable — falling back to Groq cloud');
+    }
+    return _ollamaAvailable!;
+  }
+
+  /// Check if any AI endpoint is reachable.
+  static Future<bool> _isAnyEndpointAvailable() async {
+    if (await _isOllamaAvailable()) return true;
+    return await ConnectivityService.hasInternet();
+  }
+
+  /// ─── Resolve API endpoint & model ─────────────────────────────
+  /// Returns (apiUrl, modelId, apiKey) based on availability.
+  static Future<({String url, String model, String? apiKey})> _resolveSmallModel() async {
+    if (await _isOllamaAvailable()) {
+      return (url: _ollamaApiUrl, model: _gemma4Small, apiKey: null);
+    }
+    return (url: _groqApiUrl, model: _groqSmallModel, apiKey: _groqApiKey);
+  }
+
+  static Future<({String url, String model, String? apiKey})> _resolveLargeModel() async {
+    if (await _isOllamaAvailable()) {
+      return (url: _ollamaApiUrl, model: _gemma4Large, apiKey: null);
+    }
+    return (url: _groqApiUrl, model: _groqLargeModel, apiKey: _groqApiKey);
+  }
+
+  static Map<String, String> _buildHeaders(String? apiKey) {
+    final headers = <String, String>{'Content-Type': 'application/json'};
+    if (apiKey != null && apiKey.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $apiKey';
+    }
+    return headers;
+  }
+
   static Future<String> _identifyIntent(String message) async {
     try {
+      final endpoint = await _resolveSmallModel();
+
       final response = await http.post(
-        Uri.parse(_apiUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_apiKey',
-        },
+        Uri.parse(endpoint.url),
+        headers: _buildHeaders(endpoint.apiKey),
         body: jsonEncode({
-          "model": "llama-3.1-8b-instant",
+          "model": endpoint.model,
           "messages": [
             {
               "role": "system", 
@@ -60,7 +142,7 @@ ${patientData ?? (DataMode.activeUserId == DataMode.arjunId ? Persona.aiContext 
           "temperature": 0.0,
           "max_tokens": 10,
         }),
-      ).timeout(const Duration(seconds: 2));
+      ).timeout(const Duration(seconds: 4));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -74,6 +156,15 @@ ${patientData ?? (DataMode.activeUserId == DataMode.arjunId ? Persona.aiContext 
 
   static Stream<String> sendMessageStream(String message, {String language = 'en', String? patientContext}) async* {
     try {
+      // ═══ OFFLINE-FIRST CHECK ═══════════════════════════════════
+      // If no AI endpoint is reachable, provide offline response
+      // from locally stored clinical data.
+      if (!await _isAnyEndpointAvailable()) {
+        debugPrint('[AI] ⚡ Offline mode — generating response from local records');
+        yield* _offlineFallbackStream(message);
+        return;
+      }
+
       // ═══ PARALLEL PIPELINE: Run all lookups simultaneously ═══
       // This cuts latency from ~12s to ~4s by not waiting sequentially.
       
@@ -148,13 +239,14 @@ ${patientData ?? (DataMode.activeUserId == DataMode.arjunId ? Persona.aiContext 
       }
       userPrompt += "User message: $message";
 
-      final request = http.Request('POST', Uri.parse(_apiUrl));
-      request.headers.addAll({
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer $_apiKey',
-      });
+      // ═══ Resolve model: Gemma 4 (local) → Groq (cloud fallback) ═══
+      final endpoint = await _resolveLargeModel();
+      debugPrint('[AI] Using model: ${endpoint.model} via ${endpoint.url}');
+
+      final request = http.Request('POST', Uri.parse(endpoint.url));
+      request.headers.addAll(_buildHeaders(endpoint.apiKey));
       request.body = jsonEncode({
-        "model": "llama-3.3-70b-versatile",
+        "model": endpoint.model,
         "messages": [
           {"role": "system", "content": _buildSystemInstruction(contextToUse)},
           {"role": "user", "content": userPrompt}
@@ -180,15 +272,14 @@ ${patientData ?? (DataMode.activeUserId == DataMode.arjunId ? Persona.aiContext 
           }
         }
       } else if (response.statusCode == 429 || response.statusCode == 503) {
-        // FAILOVER: Switch to 8B model if 70B is rate-limited or overloaded
-        debugPrint("Groq 70B Rate Limited. Falling back to 8B model...");
-        final fallbackRequest = http.Request('POST', Uri.parse(_apiUrl));
-        fallbackRequest.headers.addAll({
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_apiKey',
-        });
+        // FAILOVER: Switch to smaller model if rate-limited or overloaded
+        debugPrint("[AI] Primary model rate-limited. Falling back to smaller model...");
+        final fallbackEndpoint = await _resolveSmallModel();
+
+        final fallbackRequest = http.Request('POST', Uri.parse(fallbackEndpoint.url));
+        fallbackRequest.headers.addAll(_buildHeaders(fallbackEndpoint.apiKey));
         fallbackRequest.body = jsonEncode({
-          "model": "llama-3.1-8b-instant",
+          "model": fallbackEndpoint.model,
           "messages": [
             {"role": "system", "content": _buildSystemInstruction(contextToUse)},
             {"role": "user", "content": userPrompt}
@@ -217,7 +308,7 @@ ${patientData ?? (DataMode.activeUserId == DataMode.arjunId ? Persona.aiContext 
         }
       } else {
         final errorBody = await response.stream.bytesToString();
-        debugPrint("Groq API Error ($response.statusCode): $errorBody");
+        debugPrint("AI API Error (${response.statusCode}): $errorBody");
         yield "I'm having trouble processing that right now.";
       }
     } catch (e) {
@@ -228,14 +319,13 @@ ${patientData ?? (DataMode.activeUserId == DataMode.arjunId ? Persona.aiContext 
 
   static Future<String> generateTitle(String firstMessage) async {
     try {
+      final endpoint = await _resolveSmallModel();
+
       final response = await http.post(
-        Uri.parse(_apiUrl),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $_apiKey',
-        },
+        Uri.parse(endpoint.url),
+        headers: _buildHeaders(endpoint.apiKey),
         body: jsonEncode({
-          "model": "llama-3.1-8b-instant", // Using a smaller model for titles
+          "model": endpoint.model,
           "messages": [
             {
               "role": "system",
@@ -260,7 +350,63 @@ ${patientData ?? (DataMode.activeUserId == DataMode.arjunId ? Persona.aiContext 
     }
   }
 
+  /// Reset cached Ollama availability (e.g. on network change)
+  static void resetOllamaCache() {
+    _ollamaAvailable = null;
+    ConnectivityService.refresh();
+  }
+
+  /// ─── Offline Fallback ──────────────────────────────────────────
+  /// When neither local Gemma 4 nor cloud APIs are reachable,
+  /// generate a response from locally stored clinical records.
+  /// This ensures the app remains useful even without any network.
+  static Stream<String> _offlineFallbackStream(String message) async* {
+    try {
+      final atoms = await OcrService.getClinicalAtoms()
+          .timeout(const Duration(seconds: 2))
+          .catchError((_) => <Map<String, dynamic>>[]);
+
+      if (atoms.isEmpty) {
+        yield "📴 **Offline Mode** — I can't reach the AI service right now. "
+              "Your medical records are safely stored locally. "
+              "Please reconnect to get AI-powered insights.";
+        return;
+      }
+
+      // Build a basic response from local clinical data
+      yield "📴 **Offline Mode** — Here's what I found in your local records:\n\n";
+
+      final medications = atoms.where((a) => a['type'] == 'medication').toList();
+      final observations = atoms.where((a) => a['type'] == 'observation').toList();
+
+      if (medications.isNotEmpty) {
+        yield "**Current Medications:**\n";
+        for (final med in medications.take(5)) {
+          yield "• **${med['name']}** — ${med['value'] ?? ''} (${med['date'] ?? ''})\n";
+        }
+        yield "\n";
+      }
+
+      if (observations.isNotEmpty) {
+        yield "**Recent Lab Results:**\n";
+        for (final obs in observations.take(5)) {
+          yield "• **${obs['name']}**: ${obs['value'] ?? ''} ${obs['unit'] ?? ''} (${obs['date'] ?? ''})\n";
+        }
+        yield "\n";
+      }
+
+      yield "\n_Connect to your clinic network or internet for full AI analysis._";
+    } catch (_) {
+      yield "📴 **Offline Mode** — Unable to process queries without network access. "
+            "Your data is safe locally.";
+    }
+  }
+
   static void init() {
-    debugPrint("AiService initialized with Groq (Llama 3.3).");
+    debugPrint("[AI] CureNet AI Service initialized — Gemma 4 edge-first architecture");
+    debugPrint("[AI] Primary: Gemma 4 E4B ($_gemma4Small) + 27B ($_gemma4Large) via Ollama");
+    debugPrint("[AI] Fallback: Groq Cloud ($_groqSmallModel / $_groqLargeModel)");
+    // Pre-warm connectivity cache
+    ConnectivityService.refresh();
   }
 }

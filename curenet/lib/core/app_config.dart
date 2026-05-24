@@ -46,4 +46,11 @@ class AppConfig {
 
   /// Emergency Card base URL (derived from backendUrl)  
   static String get emergencyBaseUrl => '$backendUrl/api/emergency';
+
+  // ─── Gemma 4 Local Inference (Ollama) ────────────────────────────────────
+  /// Local Ollama endpoint for Gemma 4 edge inference.
+  /// Default: localhost:11434 (standard Ollama port).
+  /// Override with: --dart-define=OLLAMA_URL=http://WORKSTATION_IP:11434
+  static String get ollamaUrl =>
+      const String.fromEnvironment('OLLAMA_URL', defaultValue: 'http://localhost:11434');
 }

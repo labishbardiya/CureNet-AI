@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'core/theme.dart';
 import 'core/app_router.dart';
 import 'core/data_mode.dart';
+import 'services/db_crypto_service.dart';
 
 import 'package:provider/provider.dart';
 import 'core/auth_provider.dart';
@@ -9,6 +10,9 @@ import 'core/auth_provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DataMode.init();
+  // Initialize AES-256-GCM encryption key for the encrypted ObjectBox DB.
+  // Key is generated on first launch and stored in Android Keystore / iOS Keychain.
+  await DbCryptoService.init();
   runApp(
     MultiProvider(
       providers: [

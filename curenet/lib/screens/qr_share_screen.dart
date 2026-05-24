@@ -199,6 +199,15 @@ class _QrShareScreenState extends State<QrShareScreen> {
                               gapless: false,
                               backgroundColor: Colors.white,
                               foregroundColor: const Color(0xFF0D2240),
+                              errorStateBuilder: (cxt, err) {
+                                return const Center(
+                                  child: Text(
+                                    "Could not connect to backend.\nQR data too large.",
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(color: Colors.red),
+                                  ),
+                                );
+                              },
                             ),
                             const SizedBox(height: 20),
                             TranslatedText(_abhaNumber,

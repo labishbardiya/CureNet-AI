@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const connectDB = async () => {
     try {
         const uri = process.env.MONGO_URI;
-        
+
         if (!uri) {
             console.log(`[Database] MONGO_URI missing. Falling back to In-Memory mock DB.`);
             return;
