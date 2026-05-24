@@ -82,3 +82,4 @@ app.*.map.json
 # ─── Node.js ─────────────────────────────────────────────────────
 node_modules/
 
+HACKATHON_POST.md
