@@ -1,36 +1,58 @@
 # Root .gitignore for CureNet
 
-# ─── Generated Output & Test Data ──────────────────────────────────────
+# ─── Personal / Internal Notes ───────────────────────────────────────
+persona_prompt.txt
+.hypodoc.json
+.hypodoc/
+notes/
+scratch/
+TODO.md
+NOTES.md
+
+# ─── Generated Output & Test Data ──────────────────────────────────
 curenet/backend/output_bundles/
 curenet/backend/uploads/
 curenet/backend/ocr_scan_result.json
 curenet/backend/scratch_doc.txt
 Implementation_Guide_for_Adoption_of_FHIR_in_ABDM_and_NHCX (1).pdf
 
-# ─── Binary Data (too large for git) ──────────────────────────────────
+# ─── Binary Data (too large for git) ──────────────────────────────
 *.traineddata
 
-# ─── Local Secrets & Environment ──────────────────────────────────────
+# ─── Local Secrets & Environment ──────────────────────────────────
 .env
 .env.local
 .env.*.local
 secrets.json
+**/ephemeral/flutter_native_integration.env
 
-# ─── Academic Docs (tracked separately) ───────────────────────────────
+# ─── Lock Files ──────────────────────────────────────────────────
+curenet/pubspec.lock
+curenet/backend/package-lock.json
+
+# ─── Academic Docs (tracked separately) ───────────────────────────
 *.pdf
 *.docx
 *.xlsx
 Documentation/
 
-# ─── System / IDE files ──────────────────────────────────────────────
+# ─── System / IDE files ──────────────────────────────────────────
 .DS_Store
+**/.DS_Store
 .idea/
 *.iml
 *.ipr
 *.iws
 .vscode/
+Thumbs.db
+Desktop.ini
 
-# ─── Flutter / Dart ──────────────────────────────────────────────────
+# ─── Gemini / AI Agent Config ────────────────────────────────────
+.gemini/
+.cursor/
+.copilot/
+
+# ─── Flutter / Dart ──────────────────────────────────────────────
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .dart_tool/
@@ -40,7 +62,7 @@ Documentation/
 build/
 coverage/
 
-# ─── Mobile Build Artifacts ──────────────────────────────────────────
+# ─── Mobile Build Artifacts ──────────────────────────────────────
 /android/app/debug
 /android/app/profile
 /android/app/release
@@ -51,11 +73,12 @@ app.*.map.json
 **/google-services.json
 **/GoogleService-Info.plist
 
-# ─── Logs & Temp ─────────────────────────────────────────────────────
+# ─── Logs & Temp ─────────────────────────────────────────────────
 *.log
 *.bak
 *.swp
 *~
 
-# ─── Node.js ─────────────────────────────────────────────────────────
+# ─── Node.js ─────────────────────────────────────────────────────
 node_modules/
+
