@@ -354,8 +354,8 @@ ollama serve
 ### 2. Clone & Install Flutter Dependencies
 
 ```bash
-git clone https://github.com/labishbardiya/CureNet-AI.git
-cd CureNet-AI/curenet
+git clone https://github.com/labishbardiya/CureNet.git
+cd CureNet/curenet
 flutter pub get
 ```
 
