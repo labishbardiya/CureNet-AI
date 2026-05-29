@@ -1,6 +1,7 @@
 const fs = require('fs');
 const Record = require('../models/recordModel');
 const { generateId } = require('../utils/idGenerator');
+const { eventQueue } = require('../services/workerService');
 
 /**
  * Initiates the asynchronous OCR process.
@@ -25,6 +26,9 @@ exports.initiateScan = async (req, res) => {
         });
 
         await newJob.save();
+
+        // Drop the job onto the Event Queue (simulating BullMQ)
+        eventQueue.emit('newJob', jobId);
 
         res.status(202).json({
             status: 'success',
@@ -89,4 +93,59 @@ exports.getScanStatus = async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: 'Internal Server Error: ' + err.message });
     }
+};
+
+/**
+ * Server-Sent Events (SSE) Endpoint for real-time push notification.
+ * The Flutter client connects to this stream and waits for the job to complete.
+ * This guarantees zero polling latency.
+ */
+exports.streamScanStatus = (req, res) => {
+    const { jobId } = req.params;
+
+    // Set headers for SSE
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    // Send an initial connected ping
+    res.write(`data: {"status":"connected","jobId":"${jobId}"}\n\n`);
+
+    const onComplete = (record) => {
+        if (record.jobId === jobId) {
+            res.write(`data: ${JSON.stringify({
+                status: 'success',
+                data: {
+                    jobId: record.jobId,
+                    status: record.status,
+                    confidence_score: record.confidence_score,
+                    abdmContext: record.abdmContext,
+                    fhir_bundle: record.fhirBundle,
+                    ui_data: record.uiData
+                }
+            })}\n\n`);
+            cleanup();
+        }
+    };
+
+    const onFailed = (record) => {
+        if (record.jobId === jobId) {
+            res.write(`data: ${JSON.stringify({
+                status: 'error',
+                data: { jobId: record.jobId, state: 'failed', error: record.error }
+            })}\n\n`);
+            cleanup();
+        }
+    };
+
+    eventQueue.on('jobCompleted', onComplete);
+    eventQueue.on('jobFailed', onFailed);
+
+    const cleanup = () => {
+        eventQueue.off('jobCompleted', onComplete);
+        eventQueue.off('jobFailed', onFailed);
+        res.end();
+    };
+
+    req.on('close', cleanup);
 };

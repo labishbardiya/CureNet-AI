@@ -7,6 +7,11 @@ const { parsePrescriptionText } = require('./ocr/parserService');
 const { extractWithVisionLlm } = require('./ocr/visionLlmService');
 const { processDocument } = require('./documentProcessor');
 const { generateEmbedding } = require('./embeddingService');
+const EventEmitter = require('events');
+const Vital = require('../models/Vital');
+
+class JobQueue extends EventEmitter {}
+const eventQueue = new JobQueue();
 
 /**
  * ═══════════════════════════════════════════════════════════════════
@@ -140,11 +145,41 @@ const runJob = async (jobRecord) => {
         console.log(`[Worker] Job ${jobRecord.jobId} completed. Type: ${ui_data.document_type}, Accuracy: ${(overallConfidence * 100).toFixed(1)}%`);
         console.log(`[Worker] FHIR Bundle: ${bundlePath}`);
 
+        // 8. OPTIMIZATION: Extract Time-Series Vitals
+        if (ui_data.document_type === 'prescription' && ui_data.vitals) {
+            const vitalsToSave = [];
+            const dateStr = ui_data.summary.date ? new Date(ui_data.summary.date) : new Date();
+            if (ui_data.vitals.bp) {
+                vitalsToSave.push({ userId: jobRecord.userId, type: 'bp', value: ui_data.vitals.bp, date: dateStr });
+            }
+            if (ui_data.vitals.pulse) {
+                vitalsToSave.push({ userId: jobRecord.userId, type: 'pulse', value: ui_data.vitals.pulse, date: dateStr });
+            }
+            if (ui_data.vitals.temperature) {
+                vitalsToSave.push({ userId: jobRecord.userId, type: 'temperature', value: ui_data.vitals.temperature, date: dateStr });
+            }
+            if (ui_data.vitals.weight) {
+                vitalsToSave.push({ userId: jobRecord.userId, type: 'weight', value: ui_data.vitals.weight, date: dateStr });
+            }
+            
+            if (vitalsToSave.length > 0) {
+                try {
+                    await Vital.insertMany(vitalsToSave);
+                    console.log(`[Worker] Saved ${vitalsToSave.length} time-series vitals to MongoDB.`);
+                } catch (vErr) {
+                    console.error('[Worker] Failed to save time-series vitals:', vErr.message);
+                }
+            }
+        }
+
+        eventQueue.emit('jobCompleted', jobRecord);
+
     } catch (err) {
         console.error(`[Worker] Pipeline failed for Job: ${jobRecord.jobId}. Error: ${err.message}`);
         jobRecord.status = 'failed';
         jobRecord.error = err.message;
         await jobRecord.save();
+        eventQueue.emit('jobFailed', jobRecord);
     } finally {
         // Cleanup local generated temp files
         tempFiles.forEach(file => {
@@ -155,27 +190,17 @@ const runJob = async (jobRecord) => {
     }
 };
 
-/**
- * Worker polling wrapper. 
- */
-const pollQueue = async () => {
+eventQueue.on('newJob', async (jobId) => {
     try {
-        const jobRecord = await Record.findOneAndUpdate(
-            { status: 'pending' },
-            { status: 'processing' },
-            { new: true }
-        );
-
-        if (jobRecord) {
+        const jobRecord = await Record.findOne({ jobId });
+        if (jobRecord && jobRecord.status === 'pending') {
+            jobRecord.status = 'processing';
+            await jobRecord.save();
             await runJob(jobRecord);
         }
     } catch (err) {
-        console.error('[Worker Poller] Error polling jobs:', err.message);
-    } finally {
-        setTimeout(pollQueue, 3000);
+        console.error('[Worker Queue] Error processing new job:', err.message);
     }
-};
+});
 
-pollQueue();
-
-module.exports = { runJob };
+module.exports = { runJob, eventQueue };

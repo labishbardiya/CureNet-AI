@@ -17,8 +17,8 @@ router.post('/request', async (req, res) => {
         }
 
         // Verify the share exists
-        let patientUserId = 'arjun';
         const share = await EmergencyShare.findOne({ shareId });
+        let patientUserId = share ? (share.userId || 'arjun') : 'arjun';
         if (!share) {
             // Try base64url decode fallback — still allow request
             try {

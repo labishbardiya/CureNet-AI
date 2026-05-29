@@ -167,7 +167,7 @@ class _DocScanScreenState extends State<DocScanScreen> with SingleTickerProvider
           _statusText = "Processing OCR Payload. Please wait...";
         });
 
-        _pollOCRStatus(jobId);
+        _listenForSSE(jobId);
       } else {
         throw Exception('Server rejected upload (${response.statusCode}).');
       }
@@ -187,63 +187,75 @@ class _DocScanScreenState extends State<DocScanScreen> with SingleTickerProvider
     }
   }
 
-  void _pollOCRStatus(String jobId) {
-    Timer.periodic(const Duration(milliseconds: 1000), (timer) async {
-      try {
-        final response = await http.get(Uri.parse('$_ocrApiUrl/status/$jobId'));
-        if (response.statusCode == 200) {
-          var jsonData = jsonDecode(response.body);
-          
-          if (jsonData['data']['state'] == 'processing' || jsonData['data']['state'] == 'pending') {
-            return; 
-          }
+  void _listenForSSE(String jobId) async {
+    try {
+      final request = http.Request('GET', Uri.parse('$_ocrApiUrl/stream/$jobId'));
+      final response = await http.Client().send(request);
 
-          if (jsonData['data']['status'] == 'completed') {
-            timer.cancel();
-            setState(() {
-              _isProcessing = false;
-              _statusText = "ABDM FHIR Bundle Ready!";
-            });
-            
-            if (mounted) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ScanResultScreen(
-                    uiData: jsonData['data']['ui_data'] ?? {},
-                    fhirBundle: jsonData['data']['fhir_bundle'] ?? jsonData['data']['fhirBundle'] ?? {},
-                    abdmContext: jsonData['data']['abdmContext'] ?? {},
-                    imagePath: _pickedFile?.path,
-                  ),
-                ),
-              );
-            }
-          } else {
-            // Failed
-            timer.cancel();
-            String errorMsg = jsonData['data']['error'] ?? "Job Failed.";
-            errorMsg += " Ensure sufficient lighting and that it's a valid medical document (prescription, lab report, etc).";
-            
-            setState(() {
-              _isProcessing = false;
-              _pickedFile = null; // Reset to camera
-              _statusText = "Processing failed. Please try again.";
-            });
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(errorMsg),
-                  backgroundColor: Colors.red,
-                  duration: const Duration(seconds: 5),
-                ),
-              );
+      response.stream.transform(utf8.decoder).listen((data) {
+        final lines = data.split('\n');
+        for (var line in lines) {
+          if (line.startsWith('data: ')) {
+            final jsonStr = line.substring(6).trim();
+            if (jsonStr.isEmpty) continue;
+            try {
+              final jsonData = jsonDecode(jsonStr);
+              if (jsonData['status'] == 'connected') continue;
+              
+              if (jsonData['status'] == 'success') {
+                setState(() {
+                  _isProcessing = false;
+                  _statusText = "ABDM FHIR Bundle Ready!";
+                });
+                
+                if (mounted) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ScanResultScreen(
+                        uiData: jsonData['data']['ui_data'] ?? {},
+                        fhirBundle: jsonData['data']['fhir_bundle'] ?? jsonData['data']['fhirBundle'] ?? {},
+                        abdmContext: jsonData['data']['abdmContext'] ?? {},
+                        imagePath: _pickedFile?.path,
+                      ),
+                    ),
+                  );
+                }
+              } else if (jsonData['status'] == 'error') {
+                String errorMsg = jsonData['data']['error'] ?? "Job Failed.";
+                errorMsg += " Ensure sufficient lighting and that it's a valid medical document.";
+                
+                setState(() {
+                  _isProcessing = false;
+                  _pickedFile = null;
+                  _statusText = "Processing failed. Please try again.";
+                });
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(errorMsg),
+                      backgroundColor: Colors.red,
+                      duration: const Duration(seconds: 5),
+                    ),
+                  );
+                }
+              }
+            } catch (e) {
+              // Ignore partial JSON chunks
             }
           }
         }
-      } catch (e) {
-        // Ignore single poll failures temporarily
-      }
-    });
+      }, onError: (err) {
+        // Fallback or error handling
+        setState(() {
+          _isProcessing = false;
+          _pickedFile = null;
+          _statusText = "Stream disconnected.";
+        });
+      });
+    } catch (e) {
+      // Error
+    }
   }
 
   @override

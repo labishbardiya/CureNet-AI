@@ -250,9 +250,57 @@ async function extractWithGroq(imagePath) {
 
 
 /**
- * FALLBACK 2: Nvidia NIM Vision API (Llama 3.2 90B Vision)
+ * CLASSIFIER: Llama 3.2 11B Vision Instruct via Nvidia NIM
+ * Determines if an image is handwritten or printed very quickly (~300ms).
  */
-async function extractWithNvidia(imagePath) {
+async function classifyImageType(imagePath) {
+    if (!NVIDIA_API_KEY || NVIDIA_API_KEY === 'YOUR_NVIDIA_API_KEY_HERE') {
+        return 'printed'; // default fallback
+    }
+    try {
+        const imageContent = fs.readFileSync(imagePath).toString('base64');
+        const mimeType = imagePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
+        
+        const response = await axios.post(
+            'https://integrate.api.nvidia.com/v1/chat/completions',
+            {
+                model: "meta/llama-3.2-11b-vision-instruct",
+                messages: [
+                    {
+                        role: "user",
+                        content: [
+                            { type: "text", text: "Is this image predominantly handwritten or printed? Reply with a single word: HANDWRITTEN or PRINTED." },
+                            { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageContent}` } }
+                        ]
+                    }
+                ],
+                max_tokens: 10,
+                temperature: 0.1
+            },
+            {
+                headers: {
+                    "Authorization": `Bearer ${NVIDIA_API_KEY}`,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                timeout: 10000
+            }
+        );
+        
+        const textResult = response.data?.choices?.[0]?.message?.content?.trim().toUpperCase() || 'PRINTED';
+        if (textResult.includes('HANDWRITTEN')) return 'handwritten';
+        return 'printed';
+    } catch (err) {
+        console.error('[VisionLLM] Classification failed:', err.message);
+        return 'printed'; // fallback to printed
+    }
+}
+
+/**
+ * FALLBACK 2: Nvidia NIM Vision API
+ * Dynamically routed between Llama 3.2 90B (Handwritten) and Nemotron OCR (Printed)
+ */
+async function extractWithNvidia(imagePath, imageType = 'printed') {
     if (!NVIDIA_API_KEY || NVIDIA_API_KEY === 'YOUR_NVIDIA_API_KEY_HERE') {
         console.warn('[VisionLLM] Nvidia API Key missing. Skipping Nvidia...');
         return null;
@@ -262,12 +310,16 @@ async function extractWithNvidia(imagePath) {
         const imageContent = fs.readFileSync(imagePath).toString('base64');
         const mimeType = imagePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
 
-        console.log('[VisionLLM] Falling back to Nvidia NIM (Llama 3.2 90B Vision) extraction...');
+        const modelToUse = imageType === 'handwritten' 
+            ? "meta/llama-3.2-90b-vision-instruct" 
+            : "nvidia/nemotron-ocr-v1";
+
+        console.log(`[VisionLLM] Routing to Nvidia NIM (${modelToUse}) for ${imageType} document...`);
 
         const response = await axios.post(
             'https://integrate.api.nvidia.com/v1/chat/completions',
             {
-                model: "meta/llama-3.2-90b-vision-instruct",
+                model: modelToUse,
                 response_format: { type: "json_object" },
                 messages: [
                     {
@@ -383,11 +435,14 @@ exports.extractWithVisionLlm = async (imagePath) => {
     const gemma4Result = await extractWithGemma4Local(imagePath);
     if (gemma4Result) return gemma4Result;
 
-    // 2. Try Nvidia NIM Vision (cloud fallback — high accuracy)
-    const nvidiaResult = await extractWithNvidia(imagePath);
+    // 2. Classify Image Type (Handwritten vs Printed) using lightweight 11B model
+    const imageType = await classifyImageType(imagePath);
+
+    // 3. Try Nvidia NIM Vision (cloud fallback — high accuracy smart routing)
+    const nvidiaResult = await extractWithNvidia(imagePath, imageType);
     if (nvidiaResult) return nvidiaResult;
 
-    // 3. Try Groq Vision (cloud fallback — fast)
+    // 4. Try Groq Vision (cloud fallback — fast)
     const groqResult = await extractWithGroq(imagePath);
     if (groqResult) return groqResult;
 

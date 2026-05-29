@@ -96,6 +96,7 @@ class _QrShareScreenState extends State<QrShareScreen> {
       'physician': physician,
       'emergencyName': emergencyName,
       'emergencyPhone': emergencyPhone,
+      'userId': DataMode.activeUserId,
     };
 
     String qrId = '';

@@ -53,25 +53,27 @@ Cloud Deployment:
     └─────────┘      └─────────────────┘
 ```
 
-### Dual-Model AI Architecture
+### Dual-Model AI Architecture (Smart Routing)
 
 | Model | Runtime | Role | Context |
 |---|---|---|---|
 | **Gemma 4 E4B** | Ollama (edge device) | Intent classification, title generation, basic parsing | 128K |
-| **Gemma 4 31B Dense** | Ollama (clinic workstation) | Medical entity extraction, FHIR R4 conversion, multimodal OCR | 256K |
-| **Groq Cloud** | API fallback | When Ollama is unavailable (cloud mode) | — |
+| **Llama 3.2 11B Vision** | Nvidia NIM (Cloud) | Ultra-fast classifier (Handwritten vs Printed) | — |
+| **Llama 3.2 90B Vision** | Nvidia NIM (Cloud) | Multi-modal entity extraction & FHIR R4 mapping for Handwritten Docs | 256K |
+| **Nemotron OCR v1** | Nvidia NIM (Cloud) | Multi-modal entity extraction & FHIR R4 mapping for Printed Docs | — |
+| **Groq Cloud** | API fallback | Fast cloud fallback when NIM is unreachable | — |
 
-Routing: `Ollama local (primary) → Groq Cloud (fallback)`
+**Smart Routing Protocol:** `Image → Llama 11B Classifier → Route (Handwritten: 90B, Printed: Nemotron) → Local Fallback`
 
 ---
 
 ## Features
 
-### Intelligent Document Ingestion
-- Camera-based document scanning with viewfinder overlay
-- Hybrid OCR: EasyOCR + TrOCR + Gemma 4 31B Dense vision
-- Processes prescriptions AND lab reports
-- Extracts patient info, medications, lab results, vitals, diagnosis
+### Intelligent Document Ingestion (Event-Driven)
+- Zero-latency Server-Sent Events (SSE) push architecture for background jobs.
+- Hybrid OCR: Camera-based scanning with dynamic routing to Nvidia NIM.
+- Processes prescriptions AND lab reports.
+- Extracts patient info, medications, lab results, vitals, diagnosis.
 
 ### FHIR R4 Structured Medical Parsing
 - 756-line `fhirBuilder.js` generates ABDM-compliant FHIR R4 Document Bundles
@@ -87,10 +89,14 @@ Routing: `Ollama local (primary) → Groq Cloud (fallback)`
 - Doctor portal shows live data or rejection status
 
 ### Privacy-First Architecture
-- Encrypted ObjectBox DB: AES-256-GCM application-layer encryption
-- Keys stored in Android Keystore / iOS Keychain via `flutter_secure_storage`
-- Custom ABDM crypto: RSA-OAEP (SHA-1/MGF1), ECDH X25519, AES-GCM 256
-- Biometric authentication for Health Locker access
+- Encrypted ObjectBox DB: AES-256-GCM application-layer encryption.
+- Multi-tenant physical device isolation via dynamic namespacing (`userId`).
+- Vector Search strict partitioning (Atlas vector matching scoped by identity).
+- Custom ABDM crypto: RSA-OAEP (SHA-1/MGF1), ECDH X25519, AES-GCM 256.
+- Biometric authentication for Health Locker access.
+
+### Time-Series Medical Vitals
+- Patient vitals (BP, Pulse, Temperature) are strictly parsed and ingested into a dedicated MongoDB Time-Series collection for instantaneous historical aggregation and graphing.
 
 ### Full ABDM Integration (M1 + M2 + M3)
 - 490-line `abdm_service.dart` with complete sandbox integration
@@ -123,11 +129,13 @@ Routing: `Ollama local (primary) → Groq Cloud (fallback)`
 | Layer | Technology |
 |---|---|
 | Frontend | Flutter/Dart |
-| Backend | Node.js/Express |
-| Local AI | Ollama (Gemma 4 E4B + 31B Dense) |
+| Backend | Node.js/Express (Event-Driven EventEmitter) |
+| Local AI | Ollama (Gemma 4 E4B) |
+| Cloud AI Primary | Nvidia NIM (Llama 3.2 11B/90B Vision, Nemotron OCR) |
 | Cloud AI Fallback | Groq API |
 | Local Database | ObjectBox (AES-256-GCM encrypted) |
-| Cloud Database | MongoDB Atlas |
+| Cloud Database | MongoDB Atlas (Document + Time-Series Collections) |
+| Streaming | Server-Sent Events (SSE) |
 | FHIR | HL7 FHIR R4 (v4.0.1) |
 | ABDM | V3 Sandbox APIs |
 | Crypto | AES-256-GCM, RSA-OAEP, ECDH X25519 |
@@ -329,7 +337,8 @@ The Doctor's Portal is a web-based interface for healthcare providers to request
 ### OCR & Records
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/ocr/scan` | Process medical document image |
+| POST | `/api/ocr/scan` | Submits image to queue (Returns 202 Accepted) |
+| GET | `/api/ocr/stream/:jobId` | SSE stream for zero-latency push results |
 | GET | `/api/records/all` | Get all health records |
 
 ---

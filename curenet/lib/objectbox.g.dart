@@ -23,7 +23,7 @@ final _entities = <obx_int.ModelEntity>[
   obx_int.ModelEntity(
       id: const obx_int.IdUid(1, 4839671412030688402),
       name: 'ClinicalAtom',
-      lastPropertyId: const obx_int.IdUid(7, 3186489064714288677),
+      lastPropertyId: const obx_int.IdUid(8, 8576632378894350053),
       flags: 0,
       properties: <obx_int.ModelProperty>[
         obx_int.ModelProperty(
@@ -62,7 +62,13 @@ final _entities = <obx_int.ModelEntity>[
             id: const obx_int.IdUid(7, 3186489064714288677),
             name: 'metadataJson',
             type: 9,
-            flags: 0)
+            flags: 0),
+        obx_int.ModelProperty(
+            id: const obx_int.IdUid(8, 8576632378894350053),
+            name: 'userId',
+            type: 9,
+            flags: 2048,
+            indexId: const obx_int.IdUid(3, 8586448877520514470))
       ],
       relations: <obx_int.ModelRelation>[],
       backlinks: <obx_int.ModelBacklink>[])
@@ -104,7 +110,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
   final model = obx_int.ModelInfo(
       entities: _entities,
       lastEntityId: const obx_int.IdUid(1, 4839671412030688402),
-      lastIndexId: const obx_int.IdUid(2, 1459313797680315671),
+      lastIndexId: const obx_int.IdUid(3, 8586448877520514470),
       lastRelationId: const obx_int.IdUid(0, 0),
       lastSequenceId: const obx_int.IdUid(0, 0),
       retiredEntityUids: const [],
@@ -131,7 +137,8 @@ obx_int.ModelDefinition getObjectBoxModel() {
           final unitOffset = fbb.writeString(object.unit);
           final dateOffset = fbb.writeString(object.date);
           final metadataJsonOffset = fbb.writeString(object.metadataJson);
-          fbb.startTable(8);
+          final userIdOffset = fbb.writeString(object.userId);
+          fbb.startTable(9);
           fbb.addInt64(0, object.id);
           fbb.addOffset(1, typeOffset);
           fbb.addOffset(2, nameOffset);
@@ -139,12 +146,15 @@ obx_int.ModelDefinition getObjectBoxModel() {
           fbb.addOffset(4, unitOffset);
           fbb.addOffset(5, dateOffset);
           fbb.addOffset(6, metadataJsonOffset);
+          fbb.addOffset(7, userIdOffset);
           fbb.finish(fbb.endTable());
           return object.id;
         },
         objectFromFB: (obx.Store store, ByteData fbData) {
           final buffer = fb.BufferContext(fbData);
           final rootOffset = buffer.derefObject(0);
+          final userIdParam = const fb.StringReader(asciiOptimization: true)
+              .vTableGet(buffer, rootOffset, 18, '');
           final typeParam = const fb.StringReader(asciiOptimization: true)
               .vTableGet(buffer, rootOffset, 6, '');
           final nameParam = const fb.StringReader(asciiOptimization: true)
@@ -159,6 +169,7 @@ obx_int.ModelDefinition getObjectBoxModel() {
               const fb.StringReader(asciiOptimization: true)
                   .vTableGet(buffer, rootOffset, 16, '');
           final object = ClinicalAtom(
+              userId: userIdParam,
               type: typeParam,
               name: nameParam,
               value: valueParam,
@@ -203,4 +214,8 @@ class ClinicalAtom_ {
   /// see [ClinicalAtom.metadataJson]
   static final metadataJson =
       obx.QueryStringProperty<ClinicalAtom>(_entities[0].properties[6]);
+
+  /// see [ClinicalAtom.userId]
+  static final userId =
+      obx.QueryStringProperty<ClinicalAtom>(_entities[0].properties[7]);
 }

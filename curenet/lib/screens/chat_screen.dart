@@ -16,6 +16,10 @@ import '../core/auth_provider.dart';
 import '../core/data_mode.dart';
 import '../core/persona.dart';
 import 'profile_screen.dart';
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
+import '../services/bhashini_asr_service.dart';
+import '../core/app_config.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -28,6 +32,8 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final stt.SpeechToText _speech = stt.SpeechToText();
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  String? _audioPath;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   
   bool _isTyping = false;
@@ -46,6 +52,13 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     AiService.init();
     _loadHistory();
+  }
+
+  @override
+  void dispose() {
+    _audioRecorder.dispose();
+    _speech.cancel();
+    super.dispose();
   }
 
   Future<void> _loadHistory() async {
@@ -159,40 +172,71 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _listen() async {
     if (!_isListening) {
-      bool available = await _speech.initialize(
-        onStatus: (val) {
-          if (val == 'done' || val == 'notListening') {
-            setState(() => _isListening = false);
-          }
-        },
-        onError: (val) => print('onError: $val'),
-      );
-      if (available) {
-        setState(() => _isListening = true);
-
-        String currentLang = AppLanguage.selectedLanguage.value;
-        String localeId = 'en_US';
-        if (currentLang == 'Hindi') localeId = 'hi_IN';
-        else if (currentLang == 'Bengali') localeId = 'bn_IN';
-        else if (currentLang == 'Telugu') localeId = 'te_IN';
-        else if (currentLang == 'Marathi') localeId = 'mr_IN';
-        else if (currentLang == 'Tamil') localeId = 'ta_IN';
-        else if (currentLang == 'Gujarati') localeId = 'gu_IN';
-        else if (currentLang == 'Kannada') localeId = 'kn_IN';
-        else if (currentLang == 'Malayalam') localeId = 'ml_IN';
-
-        _speech.listen(
-          localeId: localeId,
-          onResult: (val) => setState(() {
-            _controller.text = val.recognizedWords;
-          }),
+      if (AppConfig.hasBhashiniKey) {
+        if (await _audioRecorder.hasPermission()) {
+          setState(() => _isListening = true);
+          final dir = await getTemporaryDirectory();
+          _audioPath = '${dir.path}/asr_${DateTime.now().millisecondsSinceEpoch}.wav';
+          await _audioRecorder.start(
+            const RecordConfig(encoder: AudioEncoder.wav, sampleRate: 16000, numChannels: 1),
+            path: _audioPath!,
+          );
+        }
+      } else {
+        bool available = await _speech.initialize(
+          onStatus: (val) {
+            if (val == 'done' || val == 'notListening') {
+              setState(() => _isListening = false);
+            }
+          },
+          onError: (val) => print('onError: $val'),
         );
+        if (available) {
+          setState(() => _isListening = true);
+
+          String currentLang = AppLanguage.selectedLanguage.value;
+          String localeId = 'en_US';
+          if (currentLang == 'Hindi') localeId = 'hi_IN';
+          else if (currentLang == 'Bengali') localeId = 'bn_IN';
+          else if (currentLang == 'Telugu') localeId = 'te_IN';
+          else if (currentLang == 'Marathi') localeId = 'mr_IN';
+          else if (currentLang == 'Tamil') localeId = 'ta_IN';
+          else if (currentLang == 'Gujarati') localeId = 'gu_IN';
+          else if (currentLang == 'Kannada') localeId = 'kn_IN';
+          else if (currentLang == 'Malayalam') localeId = 'ml_IN';
+
+          _speech.listen(
+            localeId: localeId,
+            onResult: (val) => setState(() {
+              _controller.text = val.recognizedWords;
+            }),
+          );
+        }
       }
     } else {
       setState(() => _isListening = false);
-      _speech.stop();
-      if (_controller.text.isNotEmpty) {
-        _sendMessage();
+      if (AppConfig.hasBhashiniKey) {
+        final path = await _audioRecorder.stop();
+        if (path != null) {
+          // Show some UI indication that it's transcribing...
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Transcribing...'), duration: Duration(seconds: 1)),
+          );
+          final text = await BhashiniAsrService.transcribeAudio(path, language: AppLanguage.selectedLanguage.value);
+          if (text != null && text.isNotEmpty) {
+            setState(() => _controller.text = text);
+            _sendMessage();
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Could not transcribe audio. Please try again.')),
+            );
+          }
+        }
+      } else {
+        _speech.stop();
+        if (_controller.text.isNotEmpty) {
+          _sendMessage();
+        }
       }
     }
   }
@@ -276,7 +320,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
         if (_autoSpeak && fullReply.isNotEmpty) {
           final plainText = fullReply.replaceAll(RegExp(r'\*|#'), '');
-          VoiceHelper.speak(plainText);
+          VoiceHelper.speak(plainText, language: languageCode, isAlreadyTranslated: true);
         }
       }
     }
@@ -388,7 +432,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   children: [
                     _actionIcon(Icons.volume_up, () async {
                       final plainText = text.replaceAll(RegExp(r'\*|#'), '');
-                      await VoiceHelper.speak(plainText);
+                      await VoiceHelper.speak(plainText, isAlreadyTranslated: true);
                     }),
                     const SizedBox(width: 8),
                     _actionIcon(Icons.content_copy, () {

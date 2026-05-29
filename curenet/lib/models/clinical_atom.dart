@@ -6,6 +6,9 @@ class ClinicalAtom {
   int id = 0;
 
   @Index()
+  String userId;
+
+  @Index()
   String type; // 'medication' | 'observation' | 'condition'
   
   String name;
@@ -18,6 +21,7 @@ class ClinicalAtom {
   String metadataJson; // JSON string for extra fields
 
   ClinicalAtom({
+    required this.userId,
     required this.type,
     required this.name,
     required this.value,

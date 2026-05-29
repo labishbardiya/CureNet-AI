@@ -22,7 +22,7 @@ class VoiceHelper {
 
   /// Speak [text] in [language] (e.g. "English", "Hindi"). Uses Bhashini if API key is set, else flutter_tts.
   /// Automatically translates [text] to the target language before speaking.
-  static Future<bool> speak(String text, {String? language}) async {
+  static Future<bool> speak(String text, {String? language, bool isAlreadyTranslated = false}) async {
     if (text.trim().isEmpty) return false;
     await init();
     lastError = null;
@@ -30,8 +30,8 @@ class VoiceHelper {
     final lang = language ?? AppLanguage.selectedLanguage.value;
     String spokenText = text;
     
-    // Translate text before sending to TTS
-    if (lang != 'English') {
+    // Translate text before sending to TTS (unless already translated)
+    if (!isAlreadyTranslated && lang != 'English') {
       try {
         spokenText = await BhashiniTranslateService.translateUiText(text, targetLanguage: lang);
       } catch (_) {}

@@ -41,7 +41,8 @@ router.post('/search/semantic', async (req, res) => {
                     "path": "vector_embedding",
                     "queryVector": queryVector,
                     "numCandidates": 100,
-                    "limit": 10
+                    "limit": 10,
+                    "filter": { "userId": req.query.userId || req.body.userId }
                 }
             },
             {
@@ -59,12 +60,18 @@ router.post('/search/semantic', async (req, res) => {
             data: results
         });
     } catch (err) {
-        const fallbackResults = await Record.find({
+        const userId = req.query.userId || req.body.userId;
+        const fallbackQuery = {
             $or: [
                 { "uiData.summary.diagnosis": { $regex: query, $options: 'i' } },
                 { "clean_text": { $regex: query, $options: 'i' } }
             ]
-        }).limit(10);
+        };
+        if (userId) {
+            fallbackQuery.userId = userId;
+        }
+        
+        const fallbackResults = await Record.find(fallbackQuery).limit(10);
         
         res.status(200).json({
             status: 'success',

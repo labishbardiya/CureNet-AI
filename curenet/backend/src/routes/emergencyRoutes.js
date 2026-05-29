@@ -9,10 +9,12 @@ const { v4: uuidv4 } = require('uuid');
  */
 router.post('/share', async (req, res) => {
     try {
+        const { userId, ...data } = req.body;
         const shareId = uuidv4().split('-')[0]; // Short ID
         const newShare = new EmergencyShare({
             shareId,
-            data: req.body
+            userId: userId || 'arjun', // Fallback to 'arjun' if not provided
+            data: data
         });
         await newShare.save();
         res.json({ shareId });

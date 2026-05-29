@@ -10,6 +10,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   local_auth_windows
   objectbox_flutter_libs
   permission_handler_windows
+  record_windows
   speech_to_text_windows
 )
 

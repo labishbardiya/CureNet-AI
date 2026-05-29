@@ -5,7 +5,7 @@
   "entities": [
     {
       "id": "1:4839671412030688402",
-      "lastPropertyId": "7:3186489064714288677",
+      "lastPropertyId": "8:8576632378894350053",
       "name": "ClinicalAtom",
       "properties": [
         {
@@ -47,13 +47,20 @@
           "id": "7:3186489064714288677",
           "name": "metadataJson",
           "type": 9
+        },
+        {
+          "id": "8:8576632378894350053",
+          "name": "userId",
+          "type": 9,
+          "flags": 2048,
+          "indexId": "3:8586448877520514470"
         }
       ],
       "relations": []
     }
   ],
   "lastEntityId": "1:4839671412030688402",
-  "lastIndexId": "2:1459313797680315671",
+  "lastIndexId": "3:8586448877520514470",
   "lastRelationId": "0:0",
   "lastSequenceId": "0:0",
   "modelVersion": 5,
