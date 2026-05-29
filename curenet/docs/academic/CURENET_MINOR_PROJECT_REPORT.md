@@ -696,8 +696,8 @@ CureNet currently serves a single role — **Patient** — but the architecture 
 
 | Role | Dashboard | Available Modules | Status |
 | :--- | :--- | :--- | :--- |
-| **Patient** | `HomeScreen` | All 27 screens (Vault, AI Chat, Scan, Share, Profile) | ✅ Live |
-| **Doctor** | `DoctorDashboard` | Record request, consent verification, ZKP queries | 🔄 Planned |
+| **Patient** | `HomeScreen` | All 28 screens (Vault, AI Chat, Scan, Share, Profile) | ✅ Live |
+| **Doctor** | Doctor's Portal (Web) | QR-based record request, real-time consent, emergency data view | ✅ Live |
 | **Admin** | `AdminPanel` | User management, audit logs, analytics | 🔄 Planned |
 
 The `AppRouter` in `app_router.dart` defines all 27 named routes with a centralized `generateRoute()` factory:
@@ -816,11 +816,11 @@ CureNet's architecture supports Zero-Knowledge verification for specific clinica
 | # | Limitation | Impact | Planned Resolution |
 | :--- | :--- | :--- | :--- |
 | 1 | **ABDM Sandbox Credentials** | M2/M3 flows cannot be tested live. | Awaiting NHA allocation of `client_id`/`client_secret`. |
-| 2 | **No Push Notifications** | Patients don't receive real-time alerts when a doctor requests access. | Firebase Cloud Messaging (FCM) integration planned. |
-| 3 | **Handwritten OCR Accuracy** | NVIDIA NIM struggles with heavily cursive prescriptions (~70% accuracy). | Fine-tuning on Indian doctor handwriting samples. |
-| 4 | **Single Patient Role** | No doctor or admin dashboard exists yet. | Role-based routing architecture is ready; screens pending. |
+| 2 | ~~**No Push Notifications**~~ | ~~Patients don't receive real-time alerts when a doctor requests access.~~ | ✅ **RESOLVED**: AccessRequestMonitor polls every 4 seconds and auto-shows consent dialog on any screen. |
+| 3 | **Handwritten OCR Accuracy** | Gemma 4 31B Dense handles most cases; heavily cursive prescriptions remain challenging (~70% accuracy). | Fine-tuning on Indian doctor handwriting samples. |
+| 4 | ~~**Single Patient Role**~~ | ~~No doctor or admin dashboard exists yet.~~ | ✅ **RESOLVED**: Doctor's Portal (web-based) deployed at `https://curenet-api.onrender.com/portal` with real-time consent flow. |
 | 5 | **No Calendar/Scheduling** | Appointment booking is a placeholder UI. | Full booking engine with hospital APIs is post-MVP. |
-| 6 | **Device-Dependent Storage** | SharedPreferences has a practical limit of ~2MB. | Migration to Hive or SQLite for high-volume record storage. |
+| 6 | ~~**Device-Dependent Storage**~~ | ~~SharedPreferences has a practical limit of ~2MB.~~ | ✅ **RESOLVED**: Migrated to AES-256-GCM encrypted ObjectBox + MongoDB Atlas (cloud). |
 | 7 | **Demo Persona Only** | App is hardcoded to Priya Sharma's clinical history. | Dynamic profile loading from ABDM profile API in production. |
 
 ---
@@ -982,7 +982,9 @@ All API keys are injected at compile-time via `--dart-define` flags. No secrets 
 | Node.js | 18+ | Backend server (optional) |
 | Git | 2.x | Version control |
 
-### C.2 Quick Start
+### C.2 Quick Start (Cloud — Recommended)
+
+The backend is deployed on **Render** and the database on **MongoDB Atlas**. No local server setup required.
 
 ```bash
 # 1. Clone the repository
@@ -992,18 +994,30 @@ cd CureNet/curenet
 # 2. Install Flutter dependencies
 flutter pub get
 
-# 3. Copy environment template
-cp .env.example .env
-# Edit .env with your actual API keys
-
-# 4. Run the application
+# 3. Run the application (connects to cloud backend by default)
 flutter run \
   --dart-define=GROQ_API_KEY=your_key \
-  --dart-define=NVIDIA_API_KEY=your_key \
   --dart-define=TAVILY_API_KEY=your_key \
   --dart-define=BHASHINI_API_KEY=your_key \
   --dart-define=BHASHINI_USER_ID=your_id \
   --dart-define=BHASHINI_AUTH=your_auth
+```
+
+**Doctor's Portal**: Open `https://curenet-api.onrender.com/portal` in any browser.
+
+### C.3 Quick Start (Local Development)
+
+```bash
+# 1. Start the backend
+cd backend && npm install
+cp .env.example .env  # Add your MongoDB URI and API keys
+npm run dev
+
+# 2. Set up USB port forwarding (if using physical device)
+adb reverse tcp:3000 tcp:3000
+
+# 3. Run Flutter with local backend override
+flutter run --dart-define=BACKEND_URL=http://127.0.0.1:3000
 ```
 
 ### C.3 Demo Credentials
