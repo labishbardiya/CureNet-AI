@@ -100,18 +100,18 @@ class _QrShareScreenState extends State<QrShareScreen> {
 
     String qrId = '';
     try {
-      // 1. Try to get a short shareId from backend
+      // Try to get a short shareId from backend (via adb reverse or LAN)
       final response = await http.post(
         Uri.parse('${AppConfig.backendUrl}/api/emergency/share'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
         qrId = jsonDecode(response.body)['shareId'];
       }
     } catch (e) {
-      debugPrint('QR Share Error: $e');
+      debugPrint('QR Share: Backend unreachable ($e). Using base64 fallback.');
     }
 
     // 2. Fallback to base64 if backend fails or payload is small

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../core/app_config.dart';
@@ -27,6 +28,51 @@ class BhashiniTranslateService {
 
   // Pipeline config cache: {"hi": {"serviceId": "...", "computeUrl": "..."}}
   static final Map<String, Map<String, String>> _pipelineCache = {};
+
+  // Track if Bhashini API is reachable
+  static bool _apiAvailable = true;
+  static int _consecutiveFailures = 0;
+
+  // ─── Offline fallback translations for critical UI strings ───────────
+  static const Map<String, Map<String, String>> _offlineTranslations = {
+    'hi': {
+      'Home': 'होम', 'Records': 'रिकॉर्ड', 'Share': 'शेयर',
+      'ABHAy': 'अभय', 'Access Requests': 'एक्सेस अनुरोध',
+      'No Pending Requests': 'कोई लंबित अनुरोध नहीं',
+      'Access Granted!': 'एक्सेस दी गई!',
+      'Return Home': 'होम पर लौटें',
+      'Revoke Access Now': 'एक्सेस रद्द करें',
+      'Share with Doctor': 'डॉक्टर के साथ साझा करें',
+      'Access expires in 30 minutes': 'एक्सेस 30 मिनट में समाप्त',
+      'No pending requests': 'कोई लंबित अनुरोध नहीं',
+      'Scan Document': 'दस्तावेज़ स्कैन करें',
+      'View Emergency Snapshot': 'आपातकालीन स्नैपशॉट देखें',
+      'Show Scan & Share QR': 'क्यूआर स्कैन और शेयर करें',
+      'Approve': 'स्वीकार', 'Deny': 'अस्वीकार',
+      '✓ Approve': '✓ स्वीकार', '✗ Deny': '✗ अस्वीकार',
+      'Doctor Access Request': 'डॉक्टर एक्सेस अनुरोध',
+      'THEY WILL SEE': 'वे देखेंगे', 'THEY WILL NOT SEE': 'वे नहीं देखेंगे',
+      'Emergency health card summary': 'आपातकालीन स्वास्थ्य कार्ड सारांश',
+      'Active medications list': 'सक्रिय दवाओं की सूची',
+      'Latest vitals & allergies': 'नवीनतम जीवन-संकेत और एलर्जी',
+      'Full prescription details': 'पूर्ण प्रिस्क्रिप्शन विवरण',
+      'Personal notes & emergency contacts': 'व्यक्तिगत नोट्स और आपातकालीन संपर्क',
+      'Access expires in 30 minutes after approval': 'स्वीकृति के बाद 30 मिनट में एक्सेस समाप्त',
+      'Health Records': 'स्वास्थ्य रिकॉर्ड',
+      'Emergency Snapshot': 'आपातकालीन स्नैपशॉट',
+      'Profile': 'प्रोफ़ाइल', 'Settings': 'सेटिंग्स',
+      'Logout': 'लॉग आउट', 'Login': 'लॉग इन',
+    },
+    'bn': {
+      'Home': 'হোম', 'Records': 'রেকর্ড', 'Share': 'শেয়ার',
+      'ABHAy': 'অভয়', 'Access Requests': 'অ্যাক্সেস অনুরোধ',
+      'Approve': 'অনুমোদন', 'Deny': 'প্রত্যাখ্যান',
+      '✓ Approve': '✓ অনুমোদন', '✗ Deny': '✗ প্রত্যাখ্যান',
+      'Return Home': 'হোমে ফিরুন',
+      'Revoke Access Now': 'এখনই অ্যাক্সেস প্রত্যাহার করুন',
+      'Access Granted!': 'অ্যাক্সেস দেওয়া হয়েছে!',
+    },
+  };
 
   static Future<void> _loadCache() async {
     if (_isCacheLoaded) return;
@@ -62,7 +108,10 @@ class BhashiniTranslateService {
 
     final apiKey = AppConfig.bhashiniApiKey;
     final userId = AppConfig.bhashiniUserId;
-    if (apiKey.isEmpty || userId.isEmpty) return null;
+    if (apiKey.isEmpty || userId.isEmpty) {
+      debugPrint('[Bhashini] API key or User ID is empty. Translation disabled.');
+      return null;
+    }
 
     try {
       final response = await http
@@ -92,7 +141,10 @@ class BhashiniTranslateService {
           )
           .timeout(const Duration(seconds: 10));
 
-      if (response.statusCode != 200) return null;
+      if (response.statusCode != 200) {
+        debugPrint('[Bhashini] Pipeline config failed: ${response.statusCode} ${response.body.substring(0, 200)}');
+        return null;
+      }
 
       final data = jsonDecode(response.body);
       final configs = data['pipelineResponseConfig'] as List?;
@@ -117,8 +169,11 @@ class BhashiniTranslateService {
         'inferenceKey': inferenceKey,
       };
       _pipelineCache[targetLangCode] = result;
+      _apiAvailable = true;
+      _consecutiveFailures = 0;
       return result;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[Bhashini] Pipeline config error: $e');
       return null;
     }
   }
@@ -133,17 +188,31 @@ class BhashiniTranslateService {
 
     await _loadCache();
 
-    // Check cache first
+    // Check persistent cache first
     if (_cache.containsKey(targetLanguage) &&
         _cache[targetLanguage]!.containsKey(text)) {
       return _cache[targetLanguage]![text]!;
     }
 
-    final targetCode = _getCode(targetLanguage);
+    // Check offline fallback translations
+    final langCode = _getCode(targetLanguage);
+    if (_offlineTranslations.containsKey(langCode) &&
+        _offlineTranslations[langCode]!.containsKey(text)) {
+      return _offlineTranslations[langCode]![text]!;
+    }
+
+    // If API has failed too many times, skip network calls
+    if (!_apiAvailable && _consecutiveFailures >= 3) {
+      return text; // Return English as fallback
+    }
 
     // Get pipeline config (serviceId + compute URL)
-    final config = await _getPipelineConfig(targetCode);
-    if (config == null) return text; // Fallback to English
+    final config = await _getPipelineConfig(langCode);
+    if (config == null) {
+      _consecutiveFailures++;
+      if (_consecutiveFailures >= 3) _apiAvailable = false;
+      return text; // Fallback to English
+    }
 
     final callbackUrl = config['callbackUrl'] ?? _computeUrl;
     final inferenceKey = config['inferenceKey'] ?? AppConfig.bhashiniAuth;
@@ -164,7 +233,7 @@ class BhashiniTranslateService {
                   'config': {
                     'language': {
                       'sourceLanguage': 'en',
-                      'targetLanguage': targetCode,
+                      'targetLanguage': langCode,
                     },
                     'serviceId': serviceId,
                   }
@@ -190,12 +259,20 @@ class BhashiniTranslateService {
             _cache.putIfAbsent(targetLanguage, () => {});
             _cache[targetLanguage]![text] = translated;
             _saveCache(); // Fire and forget
+            _consecutiveFailures = 0;
+            _apiAvailable = true;
             return translated;
           }
         }
+      } else {
+        debugPrint('[Bhashini] Inference failed: ${response.statusCode}');
+        _consecutiveFailures++;
       }
       return text;
     } catch (e) {
+      debugPrint('[Bhashini] Inference error: $e');
+      _consecutiveFailures++;
+      if (_consecutiveFailures >= 3) _apiAvailable = false;
       return text; // Fallback to original text
     }
   }

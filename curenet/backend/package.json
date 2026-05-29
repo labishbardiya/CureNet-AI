@@ -1,6 +1,9 @@
 {
   "name": "curenet-ocr-backend",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "description": "ABDM-compliant OCR async microservice",
   "main": "src/server.js",
   "scripts": {

@@ -23,6 +23,32 @@ router.post('/share', async (req, res) => {
 });
 
 /**
+ * @route GET /api/emergency/:id/json
+ * @desc Returns emergency data as JSON for the Doctor's Portal
+ */
+router.get('/:id/json', async (req, res) => {
+    try {
+        let data;
+        const share = await EmergencyShare.findOne({ shareId: req.params.id });
+        if (share) {
+            data = share.data;
+        } else {
+            try {
+                data = JSON.parse(
+                    Buffer.from(req.params.id, 'base64url').toString('utf-8')
+                );
+            } catch (e) {
+                return res.status(404).json({ error: 'Emergency card not found or expired.' });
+            }
+        }
+        res.json({ status: 'ok', data });
+    } catch (err) {
+        console.error('Error fetching emergency JSON:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+/**
  * @route GET /api/emergency/:id
  * @desc Serves a downloadable Emergency Health Card as a standalone HTML page.
  */

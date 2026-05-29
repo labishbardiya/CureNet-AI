@@ -35,11 +35,12 @@ class AppConfig {
 
   static bool get hasBhashiniKey => bhashiniApiKey.isNotEmpty;
 
-  // ─── Backend URL (change via --dart-define=BACKEND_URL=http://NEW_IP:3000) ──
+  // ─── Backend URL (Render cloud deployment, override with --dart-define) ──
   /// The single source of truth for all backend communication.
-  /// At a new venue, just change this one value to your new IP.
+  /// Cloud: https://curenet-api.onrender.com
+  /// Local dev: --dart-define=BACKEND_URL=http://127.0.0.1:3000
   static String get backendUrl =>
-      const String.fromEnvironment('BACKEND_URL', defaultValue: 'http://172.16.56.80:3000');
+      const String.fromEnvironment('BACKEND_URL', defaultValue: 'https://curenet-api.onrender.com');
 
   /// OCR API endpoint (derived from backendUrl)
   static String get ocrApiUrl => '$backendUrl/api/ocr';

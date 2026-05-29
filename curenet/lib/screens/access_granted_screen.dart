@@ -1,13 +1,56 @@
 import 'package:flutter/material.dart';
-import '../core/theme.dart';
-import 'package:curenet/core/navigation_helper.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../core/app_config.dart';
 import '../core/translated_text.dart';
 
 class AccessGrantedScreen extends StatelessWidget {
   const AccessGrantedScreen({super.key});
 
+  Future<void> _revokeAccess(BuildContext context, String requestId) async {
+    if (requestId.isEmpty) {
+      if (context.mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Session expired. Returning home."), backgroundColor: Color(0xFFE07B39)),
+        );
+      }
+      return;
+    }
+    try {
+      final response = await http.post(
+        Uri.parse('${AppConfig.backendUrl}/api/access/revoke/$requestId'),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 8));
+
+      if (context.mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(response.statusCode == 200 ? "Access revoked successfully" : "Access revoked (session may have expired)"),
+            backgroundColor: const Color(0xFFD63B3B),
+          ),
+        );
+      }
+    } catch (e) {
+      // Even if network fails, still navigate home — the TTL will auto-expire it
+      if (context.mounted) {
+        Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Access revoked locally. Server will auto-expire."),
+            backgroundColor: Color(0xFFE07B39),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Get requestId from route arguments
+    final requestId = ModalRoute.of(context)?.settings.arguments as String? ?? '';
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: Column(
@@ -34,8 +77,8 @@ class AccessGrantedScreen extends StatelessWidget {
           Container(
             width: 110,
             height: 110,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE6F7EF),
+            decoration: const BoxDecoration(
+              color: Color(0xFFE6F7EF),
               shape: BoxShape.circle,
             ),
             child: Center(
@@ -60,7 +103,7 @@ class AccessGrantedScreen extends StatelessWidget {
           ),
 
           const SizedBox(height: 8),
-          const TranslatedText("Dr. Suresh Kumar can now view your\n3-line summary and past visit list.",
+          const TranslatedText("The doctor can now view your\nemergency health card and vitals.",
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14, color: Color(0xFF5A6880), height: 1.4),
           ),
@@ -107,20 +150,15 @@ class AccessGrantedScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: TranslatedText("Access revoked successfully"), backgroundColor: Color(0xFFD63B3B)),
-                    );
-                  },
+                  onPressed: () => _revokeAccess(context, requestId),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent,
-                    side: const BorderSide(color: Color(0xFF00A3A3)),
+                    side: const BorderSide(color: Color(0xFFD63B3B)),
                     minimumSize: const Size(double.infinity, 54),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                   child: const TranslatedText("Revoke Access Now",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF00A3A3)),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFFD63B3B)),
                   ),
                 ),
               ],
@@ -168,13 +206,13 @@ class AccessGrantedScreen extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(icon, size: 22, color: active ? const Color(0xFF00A3A3) : const Color(0xFF9BA8BB)),
-          Text(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: active ? const Color(0xFF00A3A3) : const Color(0xFF9BA8BB))),
+          TranslatedText(label, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: active ? const Color(0xFF00A3A3) : const Color(0xFF9BA8BB))),
         ],
       ),
     );
   }
 
-    Widget _scanButton(BuildContext context) {
+  Widget _scanButton(BuildContext context) {
     return GestureDetector(
       onTap: () {
         if (ModalRoute.of(context)?.settings.name != '/doc-scan') {
@@ -190,16 +228,10 @@ class AccessGrantedScreen extends StatelessWidget {
             gradient: const LinearGradient(colors: [Color(0xFF00A3A3), Color(0xFF00C4C4)]),
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF00A3A3).withOpacity(0.4),
-                blurRadius: 15,
-                offset: const Offset(0, 8),
-              ),
+              BoxShadow(color: const Color(0xFF00A3A3).withOpacity(0.4), blurRadius: 15, offset: const Offset(0, 8)),
             ],
           ),
-          child: const Center(
-            child: Icon(Icons.camera_alt, size: 28, color: Colors.white),
-          ),
+          child: const Center(child: Icon(Icons.camera_alt, size: 28, color: Colors.white)),
         ),
       ),
     );

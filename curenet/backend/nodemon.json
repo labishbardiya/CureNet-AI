@@ -1,0 +1,10 @@
+{
+  "ignore": [
+    "output_bundles/*",
+    "uploads/*",
+    "scratch/*",
+    "node_modules/*"
+  ],
+  "watch": ["src/"],
+  "ext": "js,json"
+}

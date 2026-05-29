@@ -1,0 +1,31 @@
+# ─── Environment & Secrets ───
+.env
+.env.*
+*.env
+
+# ─── Flutter ───
+.dart_tool/
+.packages
+build/
+*.iml
+*.lock
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# ─── Node.js ───
+node_modules/
+backend/node_modules/
+npm-debug.log*
+
+# ─── IDE ───
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# ─── Render ───
+# render.yaml is safe to commit (no secrets, sync: false)
+
+# ─── ObjectBox ───
+objectbox/

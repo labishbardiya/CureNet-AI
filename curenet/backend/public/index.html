@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CureNet — Doctor's Portal</title>
+  <meta name="description" content="CureNet Doctor's Portal: Scan a patient's QR code to request access to their Emergency Health Card and clinical records.">
+  <meta name="theme-color" content="#0A0F1C">
+  <link rel="stylesheet" href="/portal/styles.css">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+  <!-- ═══ Navbar ═══════════════════════════════════════════════ -->
+  <nav class="navbar">
+    <a href="/portal" class="navbar-brand" onclick="goBack(); return false;">
+      <div class="navbar-logo">C</div>
+      <div>
+        <div class="navbar-title">CureNet</div>
+        <div class="navbar-subtitle">Doctor's Portal</div>
+      </div>
+    </a>
+    <div class="navbar-status">
+      <span class="dot"></span>
+      Secure Session
+    </div>
+  </nav>
+
+  <div class="main-container">
+
+    <!-- ═══ VIEW: Landing ════════════════════════════════════════ -->
+    <div class="view active" id="view-landing">
+      <div class="hero">
+        <div class="hero-icon">🩺</div>
+        <h1>Patient Health Access</h1>
+        <p>Scan the patient's QR code or enter their Share ID to request access to their Emergency Health Card and clinical records.</p>
+      </div>
+
+      <div class="input-section">
+        <!-- QR Scanner -->
+        <div class="glass-card">
+          <div class="glass-card-header">
+            <div class="glass-card-icon" style="background: var(--accent-glow);">📷</div>
+            <div>
+              <div class="glass-card-title">Scan QR Code</div>
+              <div class="glass-card-subtitle">Point your camera at the patient's QR code</div>
+            </div>
+          </div>
+          <div id="scanner-status">
+            <div class="qr-scanner-container">
+              <div id="qr-reader"></div>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="initQrScanner()" style="margin-top: 12px;">
+            📷 Start Camera Scanner
+          </button>
+        </div>
+
+        <div class="divider-text">or</div>
+
+        <!-- Upload QR Image -->
+        <div class="glass-card">
+          <div class="glass-card-header">
+            <div class="glass-card-icon" style="background: var(--green-bg);">🖼️</div>
+            <div>
+              <div class="glass-card-title">Upload QR Image</div>
+              <div class="glass-card-subtitle">Select a screenshot or photo of the patient's QR code</div>
+            </div>
+          </div>
+          <label class="upload-area" id="upload-area">
+            <input type="file" id="qr-file-input" accept="image/*" onchange="handleQrImageUpload(event)" hidden>
+            <div class="upload-area-content">
+              <span class="upload-area-icon">📁</span>
+              <span class="upload-area-text">Click to select image or drag & drop</span>
+              <span class="upload-area-hint">Supports PNG, JPG, WEBP</span>
+            </div>
+          </label>
+          <div id="upload-status" style="margin-top: 8px;"></div>
+        </div>
+
+        <div class="divider-text">or</div>
+
+        <!-- Manual Input -->
+        <div class="glass-card">
+          <div class="glass-card-header">
+            <div class="glass-card-icon" style="background: var(--blue-bg);">🔑</div>
+            <div>
+              <div class="glass-card-title">Enter Share ID</div>
+              <div class="glass-card-subtitle">Paste the ID or full URL from the patient</div>
+            </div>
+          </div>
+          <div class="input-group">
+            <span class="input-icon">🔗</span>
+            <input type="text" id="share-id-input" placeholder="e.g. a3f4b2c1 or full URL" autocomplete="off">
+          </div>
+          <button class="btn btn-primary" onclick="handleManualInput()" style="margin-top: 12px;">
+            🔍 Request Patient Access
+          </button>
+        </div>
+      </div>
+
+      <!-- Feature Highlights -->
+      <div class="feature-grid">
+        <div class="feature-card">
+          <div class="feature-card-icon">🔒</div>
+          <h3>Consent-Based</h3>
+          <p>Patient must approve access on their device before any data is shown.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-icon">📋</div>
+          <h3>FHIR R4 Compliant</h3>
+          <p>View structured clinical bundles with SNOMED CT and LOINC coding.</p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-card-icon">⏱️</div>
+          <h3>Time-Limited</h3>
+          <p>Access expires after 30 minutes. Patient can revoke at any time.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ VIEW: Waiting for Approval ═══════════════════════════ -->
+    <div class="view" id="view-waiting">
+      <div class="waiting-container">
+        <div class="waiting-pulse-ring">
+          <div class="waiting-pulse-inner">🔔</div>
+        </div>
+        <h2 class="waiting-title">Waiting for Patient Approval</h2>
+        <p class="waiting-subtitle">An access request has been sent to the patient's device. They need to approve it before you can view their records.</p>
+
+        <div class="glass-card" style="margin-top: 32px; text-align: left;">
+          <div class="glass-card-header">
+            <div class="glass-card-icon" style="background: var(--amber-bg);">⏳</div>
+            <div>
+              <div class="glass-card-title">Request Pending</div>
+              <div class="glass-card-subtitle">Request ID: <span id="waiting-request-id" style="color: var(--accent);">—</span></div>
+            </div>
+          </div>
+          <div style="font-size: 13px; color: var(--text-muted); line-height: 1.6;">
+            <p>The patient will see a notification on their CureNet app with the option to <strong style="color: var(--green);">Approve</strong> or <strong style="color: var(--red);">Deny</strong> your request.</p>
+            <p style="margin-top: 8px;">If approved, you'll get access for <strong>30 minutes</strong>.</p>
+          </div>
+        </div>
+
+        <div class="waiting-dots">
+          <span></span><span></span><span></span>
+        </div>
+
+        <button class="btn btn-secondary" onclick="goBack()" style="margin-top: 24px; max-width: 300px;">
+          ← Cancel Request
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ VIEW: Loading ════════════════════════════════════════ -->
+    <div class="view" id="view-loading">
+      <div class="loading">
+        <div class="spinner"></div>
+        <div class="loading-text">Loading patient data...</div>
+      </div>
+    </div>
+
+    <!-- ═══ VIEW: Error ══════════════════════════════════════════ -->
+    <div class="view" id="view-error">
+      <button class="back-nav" onclick="goBack()">← Back to Scanner</button>
+      <div class="error-banner">
+        <span>⚠️</span>
+        <span id="error-message">Something went wrong.</span>
+      </div>
+      <div class="empty-state">
+        <div class="empty-state-icon">🔍</div>
+        <h3>Request Failed</h3>
+        <p>The emergency card may have expired (links are valid for 1 hour) or the Share ID may be incorrect.</p>
+      </div>
+      <button class="btn btn-secondary" onclick="goBack()" style="max-width: 300px; margin: 24px auto 0; display: flex;">
+        ← Try Again
+      </button>
+    </div>
+
+    <!-- ═══ VIEW: Denied ═════════════════════════════════════════ -->
+    <div class="view" id="view-denied">
+      <div class="status-container">
+        <div class="status-icon-wrap denied">
+          <span>✗</span>
+        </div>
+        <h2 class="status-title">Access Denied</h2>
+        <p class="status-subtitle">The patient has declined your request to view their health records.</p>
+        <div class="glass-card" style="margin-top: 24px;">
+          <div style="font-size: 13px; color: var(--text-muted); line-height: 1.6; text-align: center;">
+            <p>Please consult with the patient directly and try again if needed.</p>
+            <p style="margin-top: 8px;">You may request access again by scanning a new QR code.</p>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="goBack()" style="margin-top: 32px; max-width: 300px;">
+          ← New Scan
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ VIEW: Revoked ════════════════════════════════════════ -->
+    <div class="view" id="view-revoked">
+      <div class="status-container">
+        <div class="status-icon-wrap revoked">
+          <span>🔒</span>
+        </div>
+        <h2 class="status-title">Access Revoked</h2>
+        <p class="status-subtitle">The patient has revoked your access to their health records. All data has been cleared from this session.</p>
+        <div class="glass-card" style="margin-top: 24px;">
+          <div style="font-size: 13px; color: var(--text-muted); line-height: 1.6; text-align: center;">
+            <p>This is a patient-controlled consent action per DPDP Act 2023.</p>
+            <p style="margin-top: 8px;">You may request access again with the patient's consent.</p>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="goBack()" style="margin-top: 32px; max-width: 300px;">
+          ← New Scan
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ VIEW: Emergency Card + Records ═══════════════════════ -->
+    <div class="view" id="view-card">
+      <button class="back-nav" onclick="goBack()">← New Scan</button>
+
+      <!-- Access Badge -->
+      <div class="access-badge approved">
+        ✓ Access Granted · Expires in 30 minutes · Patient can revoke at any time
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('emergency')">🆘 Emergency Card</button>
+        <button class="tab" onclick="switchTab('records')">📋 Clinical Records</button>
+      </div>
+
+      <!-- Tab: Emergency Card -->
+      <div id="tab-emergency">
+        <div id="emergency-card-content"></div>
+        <div class="action-bar">
+          <button class="btn btn-secondary" onclick="printCard()">
+            🖨️ Print Emergency Card
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab: Records -->
+      <div id="tab-records" style="display: none;">
+        <div class="records-header">
+          <h2 style="font-size: 20px; font-weight: 800;">Clinical Records</h2>
+          <div class="records-count" id="records-count">Loading...</div>
+        </div>
+        <div id="records-timeline">
+          <div class="loading">
+            <div class="spinner"></div>
+            <div class="loading-text">Loading clinical records...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ VIEW: Record Detail ══════════════════════════════════ -->
+    <div class="view" id="view-record-detail">
+      <button class="back-nav" onclick="goBackToCard()">← Back to Records</button>
+      <div class="glass-card" style="margin-bottom: 24px;">
+        <div class="glass-card-header">
+          <div class="glass-card-icon" style="background: var(--accent-glow);">📄</div>
+          <div>
+            <div class="glass-card-title" id="record-detail-title">Record Detail</div>
+            <div class="glass-card-subtitle">Structured clinical data and FHIR R4 bundle</div>
+          </div>
+        </div>
+      </div>
+      <div id="record-detail-content"></div>
+      <div class="action-bar">
+        <button class="btn btn-secondary btn-sm" onclick="goBackToCard()">← Back to Records</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Hidden canvas for QR image upload decoding -->
+  <div id="qr-upload-canvas" style="position:fixed; left:-9999px; top:-9999px; width:300px; height:300px; overflow:hidden;"></div>
+
+  <script src="/portal/app.js"></script>
+</body>
+</html>
