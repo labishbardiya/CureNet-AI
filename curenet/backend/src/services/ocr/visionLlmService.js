@@ -383,13 +383,13 @@ exports.extractWithVisionLlm = async (imagePath) => {
     const gemma4Result = await extractWithGemma4Local(imagePath);
     if (gemma4Result) return gemma4Result;
 
-    // 2. Try Groq Vision (cloud fallback — fast)
-    const groqResult = await extractWithGroq(imagePath);
-    if (groqResult) return groqResult;
-
-    // 3. Try Nvidia NIM Vision (cloud fallback — high accuracy)
+    // 2. Try Nvidia NIM Vision (cloud fallback — high accuracy)
     const nvidiaResult = await extractWithNvidia(imagePath);
     if (nvidiaResult) return nvidiaResult;
+
+    // 3. Try Groq Vision (cloud fallback — fast)
+    const groqResult = await extractWithGroq(imagePath);
+    if (groqResult) return groqResult;
 
     // 4. Mock fallback (demo)
     return getMockData();
