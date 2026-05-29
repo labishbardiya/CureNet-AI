@@ -37,10 +37,10 @@ class AppConfig {
 
   // ─── Backend URL (Render cloud deployment, override with --dart-define) ──
   /// The single source of truth for all backend communication.
-  /// Cloud: https://curenet-api.onrender.com
+  /// Cloud: https://curenet.onrender.com
   /// Local dev: --dart-define=BACKEND_URL=http://127.0.0.1:3000
   static String get backendUrl =>
-      const String.fromEnvironment('BACKEND_URL', defaultValue: 'https://curenet-api.onrender.com');
+      const String.fromEnvironment('BACKEND_URL', defaultValue: 'https://curenet.onrender.com');
 
   /// OCR API endpoint (derived from backendUrl)
   static String get ocrApiUrl => '$backendUrl/api/ocr';

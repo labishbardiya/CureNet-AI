@@ -251,8 +251,8 @@ flutter run --dart-define=BACKEND_URL=http://127.0.0.1:3000
 The backend and Doctor's Portal are deployed on Render for cloud access.
 
 ### Live URLs
-- **API**: `https://curenet-api.onrender.com`
-- **Doctor Portal**: `https://curenet-api.onrender.com/portal`
+- **API**: `https://curenet.onrender.com`
+- **Doctor Portal**: `https://curenet.onrender.com/portal`
 
 ### Deploy Your Own
 
@@ -275,7 +275,7 @@ The Doctor's Portal is a web-based interface for healthcare providers to request
 
 ### Flow
 1. Patient generates QR code from the app (Emergency Snapshot → Share)
-2. Doctor opens portal at `https://curenet-api.onrender.com/portal`
+2. Doctor opens portal at `https://curenet.onrender.com/portal`
 3. Doctor enters the share ID from the QR code
 4. Patient's phone auto-detects the request and shows an approval dialog
 5. On approval, the doctor sees the patient's emergency health card
@@ -302,7 +302,7 @@ The Doctor's Portal is a web-based interface for healthcare providers to request
 
 | Variable | Default | Description |
 |---|---|---|
-| `BACKEND_URL` | `https://curenet-api.onrender.com` | Backend API URL |
+| `BACKEND_URL` | `https://curenet.onrender.com` | Backend API URL |
 | `GROQ_API_KEY` | — | Groq API key |
 | `TAVILY_API_KEY` | — | Tavily API key |
 | `BHASHINI_API_KEY` | — | Bhashini key |

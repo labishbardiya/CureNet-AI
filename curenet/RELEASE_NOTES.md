@@ -17,7 +17,7 @@
 - Backend + Doctor's Portal deployed on **Render** (cloud)
 - **MongoDB Atlas** for persistent cloud database
 - No USB cable or local server required — works from anywhere
-- Doctor Portal accessible at: `https://curenet-api.onrender.com/portal`
+- Doctor Portal accessible at: `https://curenet.onrender.com/portal`
 
 ### Multilingual Offline Fallback
 - **60+ critical UI strings** pre-translated for Hindi and Bengali
@@ -55,7 +55,7 @@ Dual-Model AI (Edge-First):
   Groq Cloud                  →  Fallback when Ollama unavailable
 
 Cloud Infrastructure:
-  Render (Node.js + Portal)   →  https://curenet-api.onrender.com
+  Render (Node.js + Portal)   →  https://curenet.onrender.com
   MongoDB Atlas               →  Persistent cloud database
   
 Routing: Ollama local (primary) → Groq Cloud (fallback)

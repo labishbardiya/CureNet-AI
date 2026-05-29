@@ -818,7 +818,7 @@ CureNet's architecture supports Zero-Knowledge verification for specific clinica
 | 1 | **ABDM Sandbox Credentials** | M2/M3 flows cannot be tested live. | Awaiting NHA allocation of `client_id`/`client_secret`. |
 | 2 | ~~**No Push Notifications**~~ | ~~Patients don't receive real-time alerts when a doctor requests access.~~ | ✅ **RESOLVED**: AccessRequestMonitor polls every 4 seconds and auto-shows consent dialog on any screen. |
 | 3 | **Handwritten OCR Accuracy** | Gemma 4 31B Dense handles most cases; heavily cursive prescriptions remain challenging (~70% accuracy). | Fine-tuning on Indian doctor handwriting samples. |
-| 4 | ~~**Single Patient Role**~~ | ~~No doctor or admin dashboard exists yet.~~ | ✅ **RESOLVED**: Doctor's Portal (web-based) deployed at `https://curenet-api.onrender.com/portal` with real-time consent flow. |
+| 4 | ~~**Single Patient Role**~~ | ~~No doctor or admin dashboard exists yet.~~ | ✅ **RESOLVED**: Doctor's Portal (web-based) deployed at `https://curenet.onrender.com/portal` with real-time consent flow. |
 | 5 | **No Calendar/Scheduling** | Appointment booking is a placeholder UI. | Full booking engine with hospital APIs is post-MVP. |
 | 6 | ~~**Device-Dependent Storage**~~ | ~~SharedPreferences has a practical limit of ~2MB.~~ | ✅ **RESOLVED**: Migrated to AES-256-GCM encrypted ObjectBox + MongoDB Atlas (cloud). |
 | 7 | **Demo Persona Only** | App is hardcoded to Priya Sharma's clinical history. | Dynamic profile loading from ABDM profile API in production. |
@@ -1003,7 +1003,7 @@ flutter run \
   --dart-define=BHASHINI_AUTH=your_auth
 ```
 
-**Doctor's Portal**: Open `https://curenet-api.onrender.com/portal` in any browser.
+**Doctor's Portal**: Open `https://curenet.onrender.com/portal` in any browser.
 
 ### C.3 Quick Start (Local Development)
 
