@@ -192,6 +192,10 @@ class _DocScanScreenState extends State<DocScanScreen> with SingleTickerProvider
       final request = http.Request('GET', Uri.parse('$_ocrApiUrl/stream/$jobId'));
       final response = await http.Client().send(request);
 
+      if (response.statusCode != 200) {
+        throw Exception('Stream returned ${response.statusCode}');
+      }
+
       response.stream.transform(utf8.decoder).listen((data) {
         final lines = data.split('\n');
         for (var line in lines) {

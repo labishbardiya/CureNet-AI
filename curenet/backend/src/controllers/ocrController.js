@@ -107,6 +107,8 @@ exports.streamScanStatus = (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Bypass Nginx buffering on Render
+    res.flushHeaders();
 
     // Send an initial connected ping
     res.write(`data: {"status":"connected","jobId":"${jobId}"}\n\n`);
