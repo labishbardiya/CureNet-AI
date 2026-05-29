@@ -50,7 +50,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _loadHistory() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? sessionsJson = prefs.getString('chat_sessions');
+    final String? sessionsJson = prefs.getString(DataMode.storageKey('chat_sessions'));
     
     if (sessionsJson != null && sessionsJson.isNotEmpty) {
       final List<dynamic> decoded = jsonDecode(sessionsJson);
@@ -104,7 +104,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     });
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('chat_sessions', jsonEncode(_sessions));
+    await prefs.setString(DataMode.storageKey('chat_sessions'), jsonEncode(_sessions));
   }
 
   void _toggleTemporary(bool value) {
@@ -143,7 +143,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('chat_sessions', jsonEncode(_sessions));
+    await prefs.setString(DataMode.storageKey('chat_sessions'), jsonEncode(_sessions));
   }
 
   Future<void> _updateTitleAsync(int index, String message) async {
@@ -153,7 +153,7 @@ class _ChatScreenState extends State<ChatScreen> {
         _sessions[index]['title'] = title;
       });
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('chat_sessions', jsonEncode(_sessions));
+      await prefs.setString(DataMode.storageKey('chat_sessions'), jsonEncode(_sessions));
     }
   }
 
